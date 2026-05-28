@@ -222,7 +222,7 @@ class Application {
   Application(int argc, char* argv[]) : _workers() {
     std::vector<std::string> snmp_hosts;
 
-    boost::program_options::options_description desc("Allowed options");
+    boost::program_options::options_description desc("Generic options");
 
     desc.add_options()("help,h", "Produce help message")(
         "version,v", "Print version")("debug,d", "Run on debug mode")(
@@ -243,7 +243,8 @@ class Application {
     boost::program_options::notify(vm);
 
     if (vm.count("help")) {
-      std::cout << desc << std::endl;
+      std::cout << "A log aggregation and monitoring solution.\n\n"
+                << desc << "\nhttps://github.com/saturn-xiv/basil" << std::endl;
       return;
     }
     if (vm.count("version")) {
