@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <functional>
 #include <iostream>
 #include <list>
 #include <sstream>
@@ -19,6 +20,7 @@
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/trivial.hpp>
+#include <boost/process.hpp>
 #include <boost/program_options.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -73,14 +75,29 @@ struct Pod {
 };
 }  // namespace k8s
 struct Snmp {
-  static void document(boost::json::object& body, const std::string& host) {
+  Snmp(const std::string& host) {
     // TODO
   }
+  void save() {
+    // TODO
+    boost::json::object body;
+  }
+  std::string name;
+  std::string ipv4;
+  size_t memory_usage;
+  size_t memory_total;
+  size_t cpu_usage;
+
   static void properties(boost::json::object& properties) {
     {
       boost::json::object it;
       it["type"] = "text";
-      properties["host"] = it;
+      properties["name"] = it;
+    }
+    {
+      boost::json::object it;
+      it["type"] = "text";
+      properties["ipv4"] = it;
     }
     {
       boost::json::object it;
@@ -189,7 +206,52 @@ class OpenSearch {
   boost::optional<std::string> _namespace;
 };
 
-void k8s_pod_logs_watcher(std::shared_ptr<OpenSearch> search) {
+void k8s_logs(std::shared_ptr<OpenSearch> search, const std::string& namespace_,
+              const std::string& resource,
+              const std::chrono::seconds& interval) {
+  while (gl_keep_running) {
+    try {
+      // RFC3339
+      const std::string now =
+          std::format("{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(
+                                       std::chrono::utc_clock::now()));
+      BOOST_LOG_TRIVIAL(debug) << "get k8s-logs for resource " << resource
+                               << "(" << namespace_ << ") since " << now;
+      //  kubectl get pods -A -o json
+      // std::stringstream command;
+      // const std::string command_s = command.str();
+
+      const std::string command = std::format(
+          R"(kubectl logs {} -n {} --all-pods --timestamps --all-containers --since-time={})",
+          resource, namespace_, now);
+      BOOST_LOG_TRIVIAL(debug) << "run: " << command;
+      boost::process::ipstream pipe_stream;
+      boost::process::child child(command,
+                                  boost::process::std_out > pipe_stream);
+
+      std::string line;
+      while (std::getline(pipe_stream, line) && !line.empty()) {
+        BOOST_LOG_TRIVIAL(debug) << "receive line: " << line;
+      }
+
+      child.wait();
+
+      /*
+      kubectl get pods -A -o json
+
+      kubectl logs deployment/nginx -n staging-wikipali-org --all-pods
+      --timestamps
+
+
+      */
+    } catch (const std::exception& e) {
+      BOOST_LOG_TRIVIAL(error) << e.what();
+    }
+    std::this_thread::sleep_for(interval);
+  }
+}
+
+void k8s_pod_logs(std::shared_ptr<OpenSearch> search) {
   const std::filesystem::path root = "/var/log/pods";
   while (gl_keep_running) {
     BOOST_LOG_TRIVIAL(debug)
@@ -201,7 +263,6 @@ void k8s_pod_logs_watcher(std::shared_ptr<OpenSearch> search) {
     }
     std::this_thread::sleep_for(std::chrono::minutes(1));
   }
-  // TODO
 }
 
 void snmp_collector(std::shared_ptr<OpenSearch> search, const std::string& host,
@@ -221,6 +282,7 @@ class Application {
  public:
   Application(int argc, char* argv[]) : _workers() {
     std::vector<std::string> snmp_hosts;
+    std::vector<std::string> k8s_resources;
 
     boost::program_options::options_description desc("Generic options");
 
@@ -231,7 +293,10 @@ class Application {
         "Time interval in seconds")(
         "host,H",
         boost::program_options::value<std::vector<std::string>>(&snmp_hosts),
-        "SNMP hosts")("kubernetes,K", "Listen on kubernetes pod logs")(
+        "SNMP hosts")(
+        "kubernetes,K",
+        boost::program_options::value<std::vector<std::string>>(&k8s_resources),
+        "Collect logs for kubernetes(<namespace:resource>)")(
         "config,c",
         boost::program_options::value<std::string>()->default_value(
             "config.ini"),
@@ -251,10 +316,7 @@ class Application {
       std::cout << BASIL_VERSION << "(" << BASIL_BUILD_TIME << ")" << std::endl;
       return;
     }
-    bool kubernetes = false;
-    if (vm.count("kubernetes")) {
-      kubernetes = true;
-    }
+
     {
       boost::log::core::get()->set_filter(boost::log::trivial::severity >=
                                           (vm.count("debug")
@@ -293,18 +355,21 @@ class Application {
       }
     }
 
-    {
-      const auto ttl = std::chrono::seconds(interval);
-      for (const auto& host : snmp_hosts) {
-        BOOST_LOG_TRIVIAL(info) << "start a watcher for SNMP host " << host;
-        this->_workers.emplace_back(snmp_collector, search, host, ttl);
-      }
+    const auto ttl = std::chrono::seconds(interval);
+    for (const auto& host : snmp_hosts) {
+      BOOST_LOG_TRIVIAL(info) << "start a watcher for SNMP host " << host;
+      this->_workers.emplace_back(snmp_collector, search, host, ttl);
     }
-
-    if (kubernetes) {
+    for (const auto& name : k8s_resources) {
+      std::vector<std::string> items;
+      boost::split(items, name, boost::is_any_of(":"));
+      if (items.size() != 2) {
+        BOOST_LOG_TRIVIAL(error) << "invalid kubernetes resource " << name;
+        continue;
+      }
       BOOST_LOG_TRIVIAL(info)
-          << "start a watcher for kubernetes pod logs folder";
-      this->_workers.emplace_back(k8s_pod_logs_watcher, search);
+          << "start a watcher for kubernetes resource" << name;
+      this->_workers.emplace_back(k8s_logs, search, items[0], items[1], ttl);
     }
   }
 
