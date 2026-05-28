@@ -1,15 +1,170 @@
 #include <cstdint>
 #include <cstdlib>
+#include <format>
 #include <iostream>
+#include <list>
+#include <sstream>
 #include <string>
 #include <vector>
 
+#include <sys/inotify.h>
+
+#include <boost/algorithm/string.hpp>
+#include <boost/json.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/program_options.hpp>
+#include <boost/property_tree/ini_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/type_index.hpp>
+
+#include <curlpp/Easy.hpp>
+#include <curlpp/Infos.hpp>
+#include <curlpp/Options.hpp>
+#include <curlpp/cURLpp.hpp>
 
 namespace basil {
+namespace k8s {
+struct Pod {
+  static void properties(boost::json::object& properties) {
+    {
+      boost::json::object it;
+      it["type"] = "text";
+      properties["name"] = it;
+    }
+    {
+      boost::json::object it;
+      it["type"] = "text";
+      properties["level"] = it;
+    }
+    {
+      boost::json::object it;
+      it["type"] = "text";
+      properties["message"] = it;
+    }
+    {
+      boost::json::object it;
+      it["type"] = "date_nanos";
+      properties["createdAt"] = it;
+    }
+  }
+};
+}  // namespace k8s
+struct Snmp {
+  static void properties(boost::json::object& properties) {
+    {
+      boost::json::object it;
+      it["type"] = "text";
+      properties["host"] = it;
+    }
+    {
+      boost::json::object it;
+      it["type"] = "integer";
+      properties["cpu"] = it;
+    }
+    {
+      boost::json::object it;
+      it["type"] = "integer";
+      properties["memoryUsage"] = it;
+    }
+    {
+      boost::json::object it;
+      it["type"] = "integer";
+      properties["memoryTotal"] = it;
+    }
+    {
+      boost::json::object it;
+      it["type"] = "date";
+      properties["createdAt"] = it;
+    }
+  }
+};
+
+class OpenSearch {
+ public:
+  OpenSearch(const std::string& endpoint,
+             const boost::optional<std::string> namespace_)
+      : _endpoint(endpoint), _namespace(namespace_) {
+    BOOST_LOG_TRIVIAL(debug) << "open OpenSearch " << endpoint
+                             << " with namespace " << namespace_.value_or("''");
+  }
+
+  // https://docs.opensearch.org/latest/api-reference/index-apis/exists/
+  template <typename T>
+  bool index_exists() {
+    const std::string name = this->index_name<T>();
+    BOOST_LOG_TRIVIAL(debug) << "index-exists " << name;
+    const std::string url = std::format("{}/{}", this->_endpoint, name);
+
+    std::stringstream res;
+    curlpp::Easy req;
+    req.setOpt<curlpp::options::Url>(url);
+    req.setOpt(new cURLpp::options::NoBody(true));
+    req.setOpt(new cURLpp::options::HttpGet(false));
+    req.setOpt(new cURLpp::options::CustomRequest("HEAD"));
+    req.setOpt(new curlpp::options::WriteStream(&res));
+    req.perform();
+
+    const auto status = curlpp::infos::ResponseCode::get(req);
+    BOOST_LOG_TRIVIAL(debug) << status << " " << res.str();
+    return status == 200;
+  }
+
+  // https://docs.opensearch.org/latest/api-reference/index-apis/create-index/
+  // https://docs.opensearch.org/latest/mappings/supported-field-types/index/
+  template <typename T>
+  void create_index() {
+    boost::json::object body;
+    {
+      boost::json::object properties;
+      T::properties(properties);
+
+      boost::json::object mappings;
+      mappings["properties"] = properties;
+      body["mappings"] = mappings;
+    }
+    const std::string body_s = boost::json::serialize(body);
+
+    const std::string name = this->index_name<T>();
+    BOOST_LOG_TRIVIAL(warning) << "create index " << name << " " << body_s;
+    const std::string url = std::format("{}/{}", this->_endpoint, name);
+
+    std::stringstream res;
+    curlpp::Easy req;
+    req.setOpt<curlpp::options::Url>(url);
+    req.setOpt(new cURLpp::options::CustomRequest("PUT"));
+    req.setOpt(new curlpp::options::PostFields(body_s));
+    req.setOpt(new curlpp::options::PostFieldSize(body_s.length()));
+    req.setOpt(new curlpp::options::HttpHeader(json_headers()));
+    req.setOpt(new curlpp::options::WriteStream(&res));
+    req.perform();
+
+    const auto status = curlpp::infos::ResponseCode::get(req);
+    BOOST_LOG_TRIVIAL(debug) << status << " " << res.str();
+  }
+
+ private:
+  inline std::list<std::string> json_headers() {
+    std::list<std::string> items;
+    items.push_back("Content-Type: application/json");
+    return items;
+  }
+  template <typename T>
+  std::string index_name() {
+    std::string name = boost::typeindex::type_id<T>().pretty_name();
+    boost::algorithm::replace_all(name, "::", "-");
+    boost::algorithm::to_lower(name);
+
+    std::stringstream ss;
+    ss << this->_namespace.value_or("") << "." << name;
+    return ss.str();
+  }
+
+  std::string _endpoint;
+  boost::optional<std::string> _namespace;
+};
+
 class Application {
  public:
   Application(int argc, char* argv[]) {
@@ -50,8 +205,12 @@ class Application {
       BOOST_LOG_TRIVIAL(debug) << "run on debug mode";
     }
 
-    const auto config_file = vm["config"].as<std::string>();
-    BOOST_LOG_TRIVIAL(debug) << "load configuration from " << config_file;
+    boost::property_tree::ptree config;
+    {
+      const auto file = vm["config"].as<std::string>();
+      BOOST_LOG_TRIVIAL(debug) << "load configuration from " << file;
+      boost::property_tree::ini_parser::read_ini(file, config);
+    }
 
     for (const auto& it : snmp_hosts) {
       BOOST_LOG_TRIVIAL(info) << "found SNMP host " << it;
@@ -63,6 +222,18 @@ class Application {
     }
     BOOST_LOG_TRIVIAL(debug)
         << "collect SNMP data with time interval(" << interval << " seconds)";
+
+    OpenSearch search(
+        config.get<std::string>("opensearch.endpoint", "http://127.0.0.1:9200"),
+        config.get_optional<std::string>("opensearch.namespace"));
+    {
+      if (!search.index_exists<Snmp>()) {
+        search.create_index<Snmp>();
+      }
+      if (!search.index_exists<k8s::Pod>()) {
+        search.create_index<k8s::Pod>();
+      }
+    }
   }
 
  private:
