@@ -3,11 +3,13 @@
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <format>
 #include <functional>
 #include <iostream>
 #include <list>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -41,10 +43,37 @@ void signal_handler(int signal) {
 
 namespace basil {
 namespace k8s {
-struct Pod {
-  static void document(boost::json::object& body, const std::string& line) {
-    // TODO
+class Pod {
+ public:
+  Pod(const std::string& namespace_, const std::string& name,
+      const std::string& line)
+      : _namespace(namespace_), _name(name) {
+    std::regex pattern(R"(\[([\w\/-]+)\] ([\w:.-]+) (.+))");
+    std::smatch matches;
+    if (std::regex_search(line, matches, pattern)) {
+      std::cout << " matched " << matches.size() << std::endl;
+      for (const auto& it : matches) {
+        std::cout << it << std::endl;
+      }
+
+      if (matches.size() == 4) {
+        this->_create_at = matches[2];
+        this->_message = matches[3];
+        return;
+      }
+    }
+    throw std::invalid_argument("unmatch k8s log message");
   }
+  std::string id() const {
+    return std::format("{}.{}", this->_name, this->_create_at);
+  }
+  void dump(boost::json::object& body) const {
+    body["namespace"] = this->_namespace;
+    body["name"] = this->_name;
+    body["createAt"] = this->_create_at;
+    body["message"] = this->_message;
+  }
+
   static void properties(boost::json::object& properties) {
     {
       boost::json::object it;
@@ -59,11 +88,6 @@ struct Pod {
     {
       boost::json::object it;
       it["type"] = "text";
-      properties["level"] = it;
-    }
-    {
-      boost::json::object it;
-      it["type"] = "text";
       properties["message"] = it;
     }
     {
@@ -72,15 +96,20 @@ struct Pod {
       properties["createdAt"] = it;
     }
   }
+
+ private:
+  std::string _namespace;
+  std::string _name;
+  std::string _create_at;
+  std::string _message;
 };
 }  // namespace k8s
 struct Snmp {
   Snmp(const std::string& host) {
     // TODO
   }
-  void save() {
+  void dump(boost::json::object& body) const {
     // TODO
-    boost::json::object body;
   }
   std::string name;
   std::string ipv4;
@@ -152,6 +181,51 @@ class OpenSearch {
     return status == 200;
   }
 
+  // https://docs.opensearch.org/latest/api-reference/document-apis/bulk/
+  template <typename T>
+  void save(const std::vector<T> items) {
+    if (items.empty()) {
+      return;
+    }
+
+    const std::string name = this->index_name<T>();
+    BOOST_LOG_TRIVIAL(info)
+        << "save " << items.size() << " documents into " << name;
+
+    std::stringstream body;
+    for (const auto& it : items) {
+      boost::json::object header;
+      {
+        boost::json::object index;
+        index["_index"] = name;
+        index["_id"] = it.id();
+
+        header["index"] = index;
+      }
+      boost::json::object data;
+      it.dump(data);
+      body << boost::json::serialize(header) << "\n"
+           << boost::json::serialize(data) << "\n";
+    }
+
+    const std::string body_s = body.str();
+
+    const std::string url = std::format("{}/_bulk", this->_endpoint);
+
+    std::stringstream res;
+    curlpp::Easy req;
+    req.setOpt<curlpp::options::Url>(url);
+    req.setOpt(new cURLpp::options::HttpPost);
+    req.setOpt(new curlpp::options::PostFields(body_s));
+    req.setOpt(new curlpp::options::PostFieldSize(body_s.length()));
+    req.setOpt(new curlpp::options::HttpHeader(x_ndjson_headers()));
+    req.setOpt(new curlpp::options::WriteStream(&res));
+    req.perform();
+
+    const auto status = curlpp::infos::ResponseCode::get(req);
+    BOOST_LOG_TRIVIAL(debug) << status << " " << res.str();
+  }
+
   // https://docs.opensearch.org/latest/api-reference/index-apis/create-index/
   // https://docs.opensearch.org/latest/mappings/supported-field-types/index/
   template <typename T>
@@ -191,6 +265,12 @@ class OpenSearch {
     items.push_back("Content-Type: application/json");
     return items;
   }
+  inline std::list<std::string> x_ndjson_headers() {
+    std::list<std::string> items;
+    items.push_back("Content-Type: application/x-ndjson");
+    return items;
+  }
+
   template <typename T>
   std::string index_name() {
     std::string name = boost::typeindex::type_id<T>().pretty_name();
@@ -207,47 +287,65 @@ class OpenSearch {
 };
 
 void k8s_logs(std::shared_ptr<OpenSearch> search, const std::string& namespace_,
-              const std::string& resource,
               const std::chrono::seconds& interval) {
+  auto since = std::chrono::utc_clock::now();
+
   while (gl_keep_running) {
+    std::this_thread::sleep_for(interval);
+    // RFC3339
+    const std::string since_s = std::format(
+        "{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(since));
+
     try {
-      // RFC3339
-      const std::string now =
-          std::format("{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(
-                                       std::chrono::utc_clock::now()));
-      BOOST_LOG_TRIVIAL(debug) << "get k8s-logs for resource " << resource
-                               << "(" << namespace_ << ") since " << now;
-      //  kubectl get pods -A -o json
-      // std::stringstream command;
-      // const std::string command_s = command.str();
+      std::vector<std::string> pods;
+      {
+        BOOST_LOG_TRIVIAL(debug) << "get k8s pods for " << namespace_;
 
-      const std::string command = std::format(
-          R"(kubectl logs {} -n {} --all-pods --timestamps --all-containers --since-time={})",
-          resource, namespace_, now);
-      BOOST_LOG_TRIVIAL(debug) << "run: " << command;
-      boost::process::ipstream pipe_stream;
-      boost::process::child child(command,
-                                  boost::process::std_out > pipe_stream);
+        const std::string command =
+            std::format(R"(kubectl get pods -n {} -o json)", namespace_);
+        BOOST_LOG_TRIVIAL(debug) << "run: " << command;
+        boost::process::ipstream pipe_stream;
+        boost::process::child child(command,
+                                    boost::process::std_out > pipe_stream);
+        child.wait();
 
-      std::string line;
-      while (std::getline(pipe_stream, line) && !line.empty()) {
-        BOOST_LOG_TRIVIAL(debug) << "receive line: " << line;
+        const auto root = boost::json::parse(pipe_stream);
+        for (auto const& item : root.at("items").as_array()) {
+          const auto metadata = item.at("metadata").as_object();
+          const std::string pod = metadata.at("name").as_string().c_str();
+          BOOST_LOG_TRIVIAL(debug) << "found pod " << namespace_ << "/" << pod;
+          pods.push_back(pod);
+        }
       }
 
-      child.wait();
+      since = std::chrono::utc_clock::now();
+      std::vector<k8s::Pod> logs;
+      for (const auto& pod : pods) {
+        BOOST_LOG_TRIVIAL(debug) << "get k8s logs for " << pod << "/"
+                                 << namespace_ << ") since " << since_s;
+        const std::string command = std::format(
+            R"(kubectl logs {} -n {} --all-pods --timestamps --all-containers --since-time={})",
+            pod, namespace_, since_s);
+        BOOST_LOG_TRIVIAL(debug) << "run: " << command;
 
-      /*
-      kubectl get pods -A -o json
+        boost::process::ipstream pipe_stream;
+        boost::process::child child(command,
+                                    boost::process::std_out > pipe_stream);
 
-      kubectl logs deployment/nginx -n staging-wikipali-org --all-pods
-      --timestamps
+        std::string line;
+        while (std::getline(pipe_stream, line) && !line.empty()) {
+          boost::trim(line);
+          BOOST_LOG_TRIVIAL(debug) << "receive line: " << line;
+          logs.emplace_back(namespace_, pod, line);
+        }
 
+        child.wait();
+      }
 
-      */
+      search->save(logs);
     } catch (const std::exception& e) {
       BOOST_LOG_TRIVIAL(error) << e.what();
     }
-    std::this_thread::sleep_for(interval);
   }
 }
 
@@ -282,7 +380,7 @@ class Application {
  public:
   Application(int argc, char* argv[]) : _workers() {
     std::vector<std::string> snmp_hosts;
-    std::vector<std::string> k8s_resources;
+    std::vector<std::string> k8s_namespaces;
 
     boost::program_options::options_description desc("Generic options");
 
@@ -293,10 +391,10 @@ class Application {
         "Time interval in seconds")(
         "host,H",
         boost::program_options::value<std::vector<std::string>>(&snmp_hosts),
-        "SNMP hosts")(
-        "kubernetes,K",
-        boost::program_options::value<std::vector<std::string>>(&k8s_resources),
-        "Collect logs for kubernetes(<namespace:resource>)")(
+        "SNMP hosts")("kubernetes,K",
+                      boost::program_options::value<std::vector<std::string>>(
+                          &k8s_namespaces),
+                      "Collect logs for kubernetes namespaces")(
         "config,c",
         boost::program_options::value<std::string>()->default_value(
             "config.ini"),
@@ -360,16 +458,10 @@ class Application {
       BOOST_LOG_TRIVIAL(info) << "start a watcher for SNMP host " << host;
       this->_workers.emplace_back(snmp_collector, search, host, ttl);
     }
-    for (const auto& name : k8s_resources) {
-      std::vector<std::string> items;
-      boost::split(items, name, boost::is_any_of(":"));
-      if (items.size() != 2) {
-        BOOST_LOG_TRIVIAL(error) << "invalid kubernetes resource " << name;
-        continue;
-      }
+    for (const auto& namespace_ : k8s_namespaces) {
       BOOST_LOG_TRIVIAL(info)
-          << "start a watcher for kubernetes resource" << name;
-      this->_workers.emplace_back(k8s_logs, search, items[0], items[1], ttl);
+          << "start a watcher for kubernetes resource" << namespace_;
+      this->_workers.emplace_back(k8s_logs, search, namespace_, ttl);
     }
   }
 
@@ -389,6 +481,15 @@ class Application {
 }  // namespace basil
 
 int main(int argc, char* argv[]) {
+  {
+    basil::k8s::Pod pod(
+        "testing", "hi",
+        R"([pod/post-install-sl9xp-s54dj/post-install] 2026-05-24T04:46:47.079665727Z Generating optimized autoload files)");
+    boost::json::object body;
+    pod.dump(body);
+    std::cout << pod.id() << ": " << boost::json::serialize(body) << std::endl;
+  }
+
   try {
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
