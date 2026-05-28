@@ -247,7 +247,7 @@ class Application {
       return;
     }
     if (vm.count("version")) {
-      std::cout << "v2026.05.28" << std::endl;
+      std::cout << BASIL_VERSION << "(" << BASIL_BUILD_TIME << ")" << std::endl;
       return;
     }
     bool kubernetes = false;
