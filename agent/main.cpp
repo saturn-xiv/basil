@@ -1,10 +1,15 @@
+#include <atomic>
+#include <chrono>
+#include <csignal>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <format>
 #include <iostream>
 #include <list>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <sys/inotify.h>
@@ -24,10 +29,26 @@
 #include <curlpp/Options.hpp>
 #include <curlpp/cURLpp.hpp>
 
+std::atomic<bool> gl_keep_running(true);
+void signal_handler(int signal) {
+  BOOST_LOG_TRIVIAL(warning) << "receive signal " << strsignal(signal);
+  if (signal == SIGINT || signal == SIGTERM) {
+    gl_keep_running = false;
+  }
+}
+
 namespace basil {
 namespace k8s {
 struct Pod {
+  static void document(boost::json::object& body, const std::string& line) {
+    // TODO
+  }
   static void properties(boost::json::object& properties) {
+    {
+      boost::json::object it;
+      it["type"] = "text";
+      properties["namespace"] = it;
+    }
     {
       boost::json::object it;
       it["type"] = "text";
@@ -52,6 +73,9 @@ struct Pod {
 };
 }  // namespace k8s
 struct Snmp {
+  static void document(boost::json::object& body, const std::string& host) {
+    // TODO
+  }
   static void properties(boost::json::object& properties) {
     {
       boost::json::object it;
@@ -165,12 +189,41 @@ class OpenSearch {
   boost::optional<std::string> _namespace;
 };
 
+void k8s_pod_logs_watcher(std::shared_ptr<OpenSearch> search) {
+  const std::filesystem::path root = "/var/log/pods";
+  while (gl_keep_running) {
+    BOOST_LOG_TRIVIAL(debug)
+        << "watch k8s pod logs on folder " << root.string();
+    try {
+      // TODO
+    } catch (const std::exception& e) {
+      BOOST_LOG_TRIVIAL(error) << e.what();
+    }
+    std::this_thread::sleep_for(std::chrono::minutes(1));
+  }
+  // TODO
+}
+
+void snmp_collector(std::shared_ptr<OpenSearch> search, const std::string& host,
+                    const std::chrono::seconds& interval) {
+  while (gl_keep_running) {
+    BOOST_LOG_TRIVIAL(debug) << "collect SNMP from " << host;
+    try {
+      // TODO
+    } catch (const std::exception& e) {
+      BOOST_LOG_TRIVIAL(error) << e.what();
+    }
+    std::this_thread::sleep_for(interval);
+  }
+}
+
 class Application {
  public:
-  Application(int argc, char* argv[]) {
+  Application(int argc, char* argv[]) : _workers() {
     std::vector<std::string> snmp_hosts;
 
     boost::program_options::options_description desc("Allowed options");
+
     desc.add_options()("help,h", "Produce help message")(
         "version,v", "Print version")("debug,d", "Run on debug mode")(
         "interval,i",
@@ -178,7 +231,7 @@ class Application {
         "Time interval in seconds")(
         "host,H",
         boost::program_options::value<std::vector<std::string>>(&snmp_hosts),
-        "SNMP hosts")(
+        "SNMP hosts")("kubernetes,K", "Listen on kubernetes pod logs")(
         "config,c",
         boost::program_options::value<std::string>()->default_value(
             "config.ini"),
@@ -196,6 +249,10 @@ class Application {
     if (vm.count("version")) {
       std::cout << "v2026.05.28" << std::endl;
       return;
+    }
+    bool kubernetes = false;
+    if (vm.count("kubernetes")) {
+      kubernetes = true;
     }
     {
       boost::log::core::get()->set_filter(boost::log::trivial::severity >=
@@ -223,27 +280,55 @@ class Application {
     BOOST_LOG_TRIVIAL(debug)
         << "collect SNMP data with time interval(" << interval << " seconds)";
 
-    OpenSearch search(
+    std::shared_ptr<OpenSearch> search = std::make_shared<OpenSearch>(
         config.get<std::string>("opensearch.endpoint", "http://127.0.0.1:9200"),
         config.get_optional<std::string>("opensearch.namespace"));
     {
-      if (!search.index_exists<Snmp>()) {
-        search.create_index<Snmp>();
+      if (!search->index_exists<Snmp>()) {
+        search->create_index<Snmp>();
       }
-      if (!search.index_exists<k8s::Pod>()) {
-        search.create_index<k8s::Pod>();
+      if (!search->index_exists<k8s::Pod>()) {
+        search->create_index<k8s::Pod>();
+      }
+    }
+
+    {
+      const auto ttl = std::chrono::seconds(interval);
+      for (const auto& host : snmp_hosts) {
+        BOOST_LOG_TRIVIAL(info) << "start a watcher for SNMP host " << host;
+        this->_workers.emplace_back(snmp_collector, search, host, ttl);
+      }
+    }
+
+    if (kubernetes) {
+      BOOST_LOG_TRIVIAL(info)
+          << "start a watcher for kubernetes pod logs folder";
+      this->_workers.emplace_back(k8s_pod_logs_watcher, search);
+    }
+  }
+
+  void start() {
+    for (auto& it : this->_workers) {
+      if (it.joinable()) {
+        it.join();
       }
     }
   }
 
  private:
+  std::vector<std::thread> _workers;
+
   static constexpr const uint16_t MIN_INTERVAL = 5;
 };
 }  // namespace basil
 
 int main(int argc, char* argv[]) {
   try {
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
+
     basil::Application app(argc, argv);
+    app.start();
   } catch (const std::exception& e) {
     BOOST_LOG_TRIVIAL(error) << e.what();
     return EXIT_FAILURE;
