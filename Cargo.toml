@@ -1,0 +1,32 @@
+[package]
+name = "basil"
+version = "2026.5.31"
+edition = "2024"
+description = "A log aggregation and monitoring solution"
+homepage = "https://github.com/saturn-xiv/basil"
+
+[profile.release]
+lto = true
+strip = true
+
+[dependencies]
+log = "0.4"
+axum = "0.8"
+env_logger = "0.11"
+hyper = "1"
+
+[dependencies.reqwest]
+version = "0.13"
+features = ["json"]
+
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+
+[dependencies.tokio]
+version = "1"
+features = ["full"]
+
+[dependencies.clap]
+version = "4"
+features = ["derive"]

@@ -1,4 +1,6 @@
 /tmp/
+
+/Cargo.lock
 /target/
 
 /.vscode/

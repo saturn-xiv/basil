@@ -481,14 +481,17 @@ class Application {
 }  // namespace basil
 
 int main(int argc, char* argv[]) {
-  {
-    basil::k8s::Pod pod(
-        "testing", "hi",
-        R"([pod/post-install-sl9xp-s54dj/post-install] 2026-05-24T04:46:47.079665727Z Generating optimized autoload files)");
-    boost::json::object body;
-    pod.dump(body);
-    std::cout << pod.id() << ": " << boost::json::serialize(body) << std::endl;
-  }
+  // {
+  //   basil::k8s::Pod pod(
+  //       "testing", "hi",
+  //       R"([pod/post-install-sl9xp-s54dj/post-install]
+  //       2026-05-24T04:46:47.079665727Z Generating optimized autoload
+  //       files)");
+  //   boost::json::object body;
+  //   pod.dump(body);
+  //   std::cout << pod.id() << ": " << boost::json::serialize(body) <<
+  //   std::endl;
+  // }
 
   try {
     std::signal(SIGINT, signal_handler);
