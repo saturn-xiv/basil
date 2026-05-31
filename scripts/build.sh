@@ -10,15 +10,18 @@ if [ -d $TARGET ]
 then
     rm -r $TARGET
 fi
-mkdir -p $TARGET
+mkdir -p $TARGET/bin
 
 cd $WORK_DIR/agent/
 make
-cp basil-agent $TARGET/
+cp basil-agent $TARGET/bin/
 
 cd $WORK_DIR/
 cargo build --release
-cp target/release/basil $TARGET/
+cp target/release/basil $TARGET/bin/
+npm install
+cp -r node_modules assets LICENSE README.md $TARGET/
 
+XZ_OPT=-9 tar -cJf $TARGET.tar.xz  -C $TARGET .
 echo "done($PACKAGE)."
 exit 0
