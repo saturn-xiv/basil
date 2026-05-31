@@ -3,6 +3,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 use axum::{Router, routing::get};
+use opensearch::{
+    OpenSearch as OpenSearchClient,
+    http::{
+        Url,
+        transport::{SingleNodeConnectionPool, TransportBuilder},
+    },
+};
 use serde::{Deserialize, Serialize};
 use tokio::signal;
 
@@ -13,6 +20,10 @@ pub async fn launch<P: AsRef<Path>>(config: P, port: u16) -> Result<()> {
     let config: Config = parse_toml(config)?;
     let state = controllers::State {
         jwt: Arc::new(Jwt::new(&config.jwt_key)?),
+        search: Arc::new(controllers::OpenSearch {
+            client: config.opensearch.open()?,
+            namespace: config.opensearch.namespace.clone(),
+        }),
     };
     let app = Router::new()
         .route("/{token}/pods/{name}", get(controllers::pods::show::get))
@@ -59,4 +70,14 @@ struct Config {
 struct OpenSearch {
     endpoint: String,
     namespace: Option<String>,
+}
+
+impl OpenSearch {
+    fn open(&self) -> Result<OpenSearchClient> {
+        let url = Url::parse(&self.endpoint)?;
+        let transport = TransportBuilder::new(SingleNodeConnectionPool::new(url))
+            .disable_proxy()
+            .build()?;
+        Ok(OpenSearchClient::new(transport))
+    }
 }

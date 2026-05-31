@@ -45,12 +45,12 @@ enum Commands {
     GenerateToken {
         #[arg(short, long, required = true, help = "Username")]
         user: String,
-        #[arg(short, long, required = true, help = "Years")]
+        #[arg(short, long, help = "Years", default_value = "10")]
         years: u8,
     },
     #[command(about = "Launch a HTTP server")]
     Http {
-        #[arg(short, long, required = true, help = "Port")]
+        #[arg(short, long, help = "Port", default_value = "8080")]
         port: u16,
     },
 }
