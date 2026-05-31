@@ -11,7 +11,6 @@ use serde::de::DeserializeOwned;
 
 use super::{HttpError, Result};
 
-const NAME: &str = env!("CARGO_PKG_NAME");
 const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 const HOMEPAGE: &str = env!("CARGO_PKG_HOMEPAGE");
 const BANNER: &str = include_str!("banner.txt");
@@ -27,7 +26,7 @@ pub async fn run() -> Result<()> {
 }
 
 #[derive(Debug, Parser)]
-#[command(name = NAME, version = GIT_VERSION, about = DESCRIPTION, before_help = BANNER, after_help = HOMEPAGE, long_about = None, propagate_version = true, arg_required_else_help = true)]
+#[command(name = super::NAME, version = GIT_VERSION, about = DESCRIPTION, before_help = BANNER, after_help = HOMEPAGE, long_about = None, propagate_version = true, arg_required_else_help = true)]
 struct Cli {
     #[arg(
         short,

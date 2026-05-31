@@ -2,8 +2,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::super::{Result, jwt::Jwt};
-use super::{NAME, parse_toml};
+use super::super::{NAME, Result, jwt::Jwt};
+use super::parse_toml;
 
 pub fn generate<P: AsRef<Path>>(config: P, user: &str, years: u8) -> Result<()> {
     let config: Config = parse_toml(config)?;

@@ -9,6 +9,7 @@ use std::result::Result as StdResult;
 
 use hyper::StatusCode;
 
+pub const NAME: &str = env!("CARGO_PKG_NAME");
 pub type Error = Box<dyn StdError + Send + Sync>;
 pub type Result<T> = StdResult<T, Error>;
 
