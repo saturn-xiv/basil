@@ -3,7 +3,8 @@
 set -e
 
 export WORK_DIR=$PWD
-export TARGET=$WORK_DIR/tmp/basil-$(git describe --tags --always --dirty --first-parent)-$(uname -m)
+export PACKAGE=basil-$(git describe --tags --always --dirty --first-parent)-$(uname -m)
+export TARGET=$WORK_DIR/tmp/$PACKAGE
 
 if [ -d $TARGET ]
 then
@@ -19,5 +20,5 @@ cd $WORK_DIR/
 cargo build --release
 cp target/release/basil $TARGET/
 
-echo "done."
+echo "done($PACKAGE)."
 exit 0
