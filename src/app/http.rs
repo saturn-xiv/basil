@@ -12,6 +12,7 @@ use opensearch::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::signal;
+use tower_http::services::ServeDir;
 
 use super::super::{Result, controllers, jwt::Jwt};
 use super::parse_toml;
@@ -29,6 +30,8 @@ pub async fn launch<P: AsRef<Path>>(config: P, port: u16) -> Result<()> {
         .route("/{token}/pods/{name}", get(controllers::pods::show::get))
         .route("/{token}/pods", get(controllers::pods::index))
         .route("/{token}/nodes", get(controllers::nodes::index))
+        .nest_service("/assets", ServeDir::new("assets"))
+        .nest_service("/3rd", ServeDir::new("node_modules"))
         .with_state(state);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     log::info!("listening on http://{addr}");
