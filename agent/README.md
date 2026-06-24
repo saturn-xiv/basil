@@ -5,7 +5,7 @@
 - Building
 
 ```bash
-$ podman run --rm -it --events-backend=file --network host -v $(dirname $PWD):/mnt:z ubuntu:jammy
+$ podman run --rm -it --events-backend=file --network host -v $(dirname $PWD):/mnt:z ubuntu:noble
 > cd /mnt/agent/
 > ./build.sh
 ```
@@ -13,6 +13,6 @@ $ podman run --rm -it --events-backend=file --network host -v $(dirname $PWD):/m
 - Deployment
 
 ```bash
-sudo apt install snmpd libboost-log1.83.0 libboost-program-options1.83.0 libboost-json1.83.0 libsnmp40t64 libcurlpp0t64
+sudo apt install snmpd libsnmp40t64 libcurl4t64
 sudo timedatectl set-timezone UTC
 ```
