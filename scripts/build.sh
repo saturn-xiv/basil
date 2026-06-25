@@ -11,7 +11,15 @@ then
     rm -r $TARGET
 fi
 
-cd $WORK_DIR/agent/
+cd $WORK_DIR/
+cmake -Wno-dev -DCMAKE_BUILD_TYPE=Release \
+    -DCPR_USE_SYSTEM_CURL=ON -DBUILD_SHARED_LIBS=OFF -DCPR_BUILD_TESTS=OFF \
+    -DINJA_BUILD_TESTS=OFF \
+    -B $WORK_DIR/build -S $WORK_DIR/lavender \
+    -G Ninja
+cmake --build $WORK_DIR/build
+mkdir -p $TARGET/$(uname -m)/bin
+cp $WORK_DIR/build/lavender $TARGET/$(uname -m)/bin/
 
 cd $WORK_DIR/
 platforms=("x86_64" "aarch64")
