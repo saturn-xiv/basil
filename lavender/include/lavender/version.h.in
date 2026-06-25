@@ -1,0 +1,18 @@
+#pragma once
+
+#include <string>
+
+// clang-format off
+namespace lavender {
+
+inline static const std::string VERSION = "v${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}";
+inline static const std::string GIT_VERSION = "${GIT_COMMIT}";
+inline static const std::string BUILD_TIME = "${VERSION_BUILD}";
+
+inline static const std::string PROJECT_NAME = "Lavender";
+inline static const std::string PROJECT_DESCRIPTION = "A logging crawler";
+
+inline static const std::string PROJECT_HOME = "https://github.com/saturn-xiv/palm/tree/main/lavender";
+
+}
+// clang-format on
