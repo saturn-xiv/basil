@@ -5,14 +5,15 @@
 // clang-format off
 namespace lavender {
 
-inline static const std::string VERSION = "v${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}";
-inline static const std::string GIT_VERSION = "${GIT_COMMIT}";
-inline static const std::string BUILD_TIME = "${VERSION_BUILD}";
+inline static const std::string VERSION = "v@lavender_VERSION_MAJOR@.@lavender_VERSION_MINOR@.@lavender_VERSION_PATCH@";
 
-inline static const std::string PROJECT_NAME = "Lavender";
-inline static const std::string PROJECT_DESCRIPTION = "A logging crawler";
+inline static const std::string GIT_VERSION = "@GIT_REV@";
+inline static const std::string BUILD_TIME = "@BUILD_TIME@";
 
-inline static const std::string PROJECT_HOME = "https://github.com/saturn-xiv/palm/tree/main/lavender";
+inline static const std::string PROJECT_NAME = "@CMAKE_PROJECT_NAME@";
+inline static const std::string PROJECT_DESCRIPTION = "@CMAKE_PROJECT_DESCRIPTION@";
+
+inline static const std::string PROJECT_HOME = "https://github.com/saturn-xiv/basil";
 
 }
 // clang-format on

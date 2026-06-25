@@ -1,5 +1,5 @@
-/.xmake/
 /build/
+/include/lavender/version.hpp
 
 /tmp/
 /config.ini
