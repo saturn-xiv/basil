@@ -8,11 +8,11 @@
 
 lavender::logging::filesystem::File::File(const std::filesystem::path& file)
     : _file(file) {
-  BOOST_LOG_TRIVIAL(debug) << "found file " << this->_file.string();
+  spdlog::debug("found file {}", this->_file.string());
   {
     auto fd = fopen(this->_file.c_str(), "r");
     if (fd == nullptr) {
-      BOOST_LOG_TRIVIAL(error) << std::strerror(errno);
+      spdlog::error("{}", std::strerror(errno));
       return;
     }
     fseek(fd, 0, SEEK_END);
@@ -29,11 +29,11 @@ std::string lavender::logging::filesystem::File::read() {
   {
     auto fd = fopen(this->_file.c_str(), "r");
     if (fd == nullptr) {
-      BOOST_LOG_TRIVIAL(error) << std::strerror(errno);
+      spdlog::error("{}", std::strerror(errno));
       return "";
     }
     if (fseek(fd, this->_pos, SEEK_SET) != 0) {
-      BOOST_LOG_TRIVIAL(error) << "invalid postion " << this->_pos;
+      spdlog::error("invalid postion {}", this->_pos);
       fclose(fd);
       return "";
     }
@@ -70,7 +70,7 @@ lavender::logging::filesystem::Watcher::Watcher(
     throw std::runtime_error(path.string() + " isn't a valid filepath");
   }
 
-  BOOST_LOG_TRIVIAL(info) << "watching on " << path.string();
+  spdlog::info("watching on {}", path.string());
   this->_file = inotify_init();
   if (this->_file < 0) {
     throw std::runtime_error(std::strerror(errno));
@@ -92,7 +92,7 @@ void lavender::logging::filesystem::Watcher::sync(
     const std::filesystem::path& file) {
   auto msg = this->_items[file]->read();
   boost::algorithm::trim(msg);
-  BOOST_LOG_TRIVIAL(debug) << msg;
+  spdlog::debug("{}", msg);
   if (msg.empty()) {
     return;
   }
@@ -114,55 +114,48 @@ void lavender::logging::filesystem::Watcher::watch() {
 
   auto length = read(this->_file, buffer, BUFFER_LEN);
   if (length < 0) {
-    BOOST_LOG_TRIVIAL(error)
-        << "read(" << errno << "): " << std::strerror(errno);
+    spdlog::error("read({}): {}", errno, std::strerror(errno));
     return;
   }
-  BOOST_LOG_TRIVIAL(debug) << "receive buffer(" << length << " bytes)";
+  spdlog::debug("receive buffer {} bytes", length);
 
   int i = 0;
 
   while (i < length) {
     struct inotify_event* event = (struct inotify_event*)&buffer[i];
-    BOOST_LOG_TRIVIAL(debug)
-        << "get event: name(" << event->name << ") length(" << event->len
-        << ") cookie(" << event->cookie << ") mask(" << event->mask << ")";
+    spdlog::debug("get event: name({}) length({}) cookie({}) mask({})",
+                  event->name, event->len, event->cookie, event->mask);
 
     if (event->len) {
       if (event->mask & IN_CREATE) {
         if (event->mask & IN_ISDIR) {
-          BOOST_LOG_TRIVIAL(info)
-              << "directory " << event->name << " was created";
+          spdlog::info("directory {}  was created", event->name);
         } else {
           const auto file = this->_root / event->name;
-          BOOST_LOG_TRIVIAL(info) << "file " << file.string() << " was created";
+          spdlog::info("file {} was created", file.string());
           auto it = std::make_shared<lavender::logging::filesystem::File>(file);
           this->_items[file] = it;
         }
       } else if (event->mask & IN_DELETE) {
         if (event->mask & IN_ISDIR) {
-          BOOST_LOG_TRIVIAL(info)
-              << "directory " << event->name << " was deleted";
+          spdlog::info("directory {} was deleted", event->name);
         } else {
           const auto file = this->_root / event->name;
-          BOOST_LOG_TRIVIAL(info) << "file " << file.string() << " was deleted";
+          spdlog::info("file {} was deleted", file.string());
           this->_items.erase(file);
         }
       } else if (event->mask & IN_MODIFY) {
         if (event->mask & IN_ISDIR) {
-          BOOST_LOG_TRIVIAL(info)
-              << "directory " << event->name << " was modified";
+          spdlog::info("directory {} was modified", event->name);
         } else {
           const auto file = this->_root / event->name;
-          BOOST_LOG_TRIVIAL(info)
-              << "file " << file.string() << " was modified";
+          spdlog::info("file {} was modified", file.string());
           this->sync(file);
         }
       }
     } else {
       if (event->mask & IN_MODIFY) {
-        BOOST_LOG_TRIVIAL(info)
-            << "file " << this->_root.string() << " was modified";
+        spdlog::info("file {} was modified", this->_root.string());
         this->sync(this->_root);
       }
     }

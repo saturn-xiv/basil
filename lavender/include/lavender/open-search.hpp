@@ -2,10 +2,11 @@
 
 #include <format>
 
-#include <cpr/cpr.h>
 #include <boost/algorithm/string.hpp>
-#include <boost/log/trivial.hpp>
 #include <boost/type_index.hpp>
+
+#include <cpr/cpr.h>
+#include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 
 namespace lavender {
@@ -24,49 +25,45 @@ class OpenSearch {
  public:
   OpenSearch(const std::string& url, const std::string& namespace_)
       : _url(url), _namespace(namespace_) {
-    BOOST_LOG_TRIVIAL(debug) << "open " << this->_url;
+    spdlog::debug("open {}", this->_url);
   }
 
   template <typename T>
   bool index_document(const T& object) const {
     const auto name = this->index<T>();
-    BOOST_LOG_TRIVIAL(debug) << "index document " << name;
+    spdlog::debug("index document {}", name);
     nlohmann::json body;
     nlohmann::to_json(body, object);
-
-    // BOOST_LOG_TRIVIAL(debug) << body.dump();
 
     cpr::Response res = cpr::Post(
         cpr::Url{this->url(name) + "/_doc/"}, cpr::Body{body.dump()},
         cpr::Header{{lavender::http::headers::CONTENT_TYPE,
                      lavender::http::content_types::APPLICATION_JSON_UTF8}});
-    BOOST_LOG_TRIVIAL(debug) << res.status_code << " " << res.text;
+    spdlog::debug("{} {}", res.status_code, res.text);
     return res.status_code == 200;
   }
 
   template <typename T>
   bool index_document(const std::string& id, const T& object) const {
     const auto name = this->index<T>();
-    BOOST_LOG_TRIVIAL(debug) << "index document " << id << " " << name;
+    spdlog::debug("index document {} {}", id, name);
     nlohmann::json body;
     nlohmann::to_json(body, object);
-
-    // BOOST_LOG_TRIVIAL(debug) << body.dump();
 
     cpr::Response res = cpr::Put(
         cpr::Url{this->url(name) + "/_doc/" + id}, cpr::Body{body.dump()},
         cpr::Header{{lavender::http::headers::CONTENT_TYPE,
                      lavender::http::content_types::APPLICATION_JSON_UTF8}});
-    BOOST_LOG_TRIVIAL(debug) << res.status_code << " " << res.text;
+    spdlog::debug("{} {}", res.status_code, res.text);
     return res.status_code == 200;
   }
 
   template <typename T>
   bool index_exists() const {
     const auto name = this->index<T>();
-    BOOST_LOG_TRIVIAL(debug) << "index exists " << name;
+    spdlog::debug("index exists {}", name);
     cpr::Response res = cpr::Head(cpr::Url{this->url(name)});
-    BOOST_LOG_TRIVIAL(debug) << res.status_code << " " << res.text;
+    spdlog::debug("{} {}", res.status_code, res.text);
     return res.status_code == 200;
   }
 
@@ -80,16 +77,16 @@ class OpenSearch {
     config["mappings"] = mappings;
 
     const std::string body = config.dump();
-    BOOST_LOG_TRIVIAL(warning) << "create index " << name << ": " << body;
+    spdlog::warn("create index {}: {}", name, body);
     cpr::Response res = cpr::Put(
         cpr::Url{this->url(name)}, cpr::Body{body},
         cpr::Header{{lavender::http::headers::CONTENT_TYPE,
                      lavender::http::content_types::APPLICATION_JSON_UTF8}});
     if (res.status_code != 200) {
-      BOOST_LOG_TRIVIAL(error) << res.status_code << " " << res.text;
+      spdlog::error("{} {}", res.status_code, res.text);
       return false;
     }
-    BOOST_LOG_TRIVIAL(info) << res.text;
+    spdlog::info("{}", res.text);
 
     return true;
   }

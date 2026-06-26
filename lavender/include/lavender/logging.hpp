@@ -8,8 +8,6 @@
 #include <sstream>
 #include <string>
 
-#include <nlohmann/json.hpp>
-
 namespace lavender {
 namespace logging {
 namespace filesystem {
@@ -19,7 +17,8 @@ struct Message {
   std::string line;
   std::chrono::time_point<std::chrono::high_resolution_clock> created_at;
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Message, host, file, line, created_at)
+// TODO created at
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Message, host, file, line)
 
 class File {
  public:
@@ -78,7 +77,7 @@ struct adl_serializer<std::chrono::time_point<Clock, Duration>> {
     std::istringstream in{s};
     in >> std::chrono::parse("%FT%T%z", o);
     if (in.fail()) {
-      BOOST_LOG_TRIVIAL(error) << "failed to parse " << s;
+      spdlog::error("failed to parse {}", s);
     }
   }
 };

@@ -12,14 +12,15 @@ then
 fi
 
 cd $WORK_DIR/
-cmake -Wno-dev -DCMAKE_BUILD_TYPE=Release \
+export LAVENDER_BUILD_DIR=$WORK_DIR/lavender/build
+cmake -Wno-dev -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
     -DCPR_USE_SYSTEM_CURL=ON -DBUILD_SHARED_LIBS=OFF -DCPR_BUILD_TESTS=OFF \
     -DINJA_BUILD_TESTS=OFF \
-    -B $WORK_DIR/build -S $WORK_DIR/lavender \
+    -B $LAVENDER_BUILD_DIR -S $WORK_DIR/lavender \
     -G Ninja
-cmake --build $WORK_DIR/build
+cmake --build $LAVENDER_BUILD_DIR
 mkdir -p $TARGET/$(uname -m)/bin
-cp $WORK_DIR/build/lavender $TARGET/$(uname -m)/bin/
+cp $LAVENDER_BUILD_DIR/lavender $TARGET/$(uname -m)/bin/
 
 cd $WORK_DIR/
 platforms=("x86_64" "aarch64")

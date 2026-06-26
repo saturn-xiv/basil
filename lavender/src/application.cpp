@@ -12,8 +12,6 @@
 #include <thread>
 
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/log/core.hpp>
-#include <boost/log/expressions.hpp>
 #include <boost/program_options.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -50,13 +48,11 @@ int lavender::Application::launch(int argc, char** argv) const {
     return EXIT_SUCCESS;
   }
 
-  boost::log::core::get()->set_filter(
-      boost::log::trivial::severity >=
-      (vm.count("debug") ? boost::log::trivial::severity_level::debug
-                         : boost::log::trivial::severity_level::debug));
-  BOOST_LOG_TRIVIAL(debug) << "runing on debug mode";
+  spdlog::set_level(vm.count("debug") ? spdlog::level::debug
+                                      : spdlog::level::info);
+  spdlog::debug("runing on debug mode");
 
-  BOOST_LOG_TRIVIAL(debug) << "load configuration from file " << config_file;
+  spdlog::debug("load configuration from file {}", config_file);
 
   boost::property_tree::ptree tree;
   boost::property_tree::ini_parser::read_ini(config_file, tree);
@@ -96,8 +92,7 @@ int lavender::Application::launch(int argc, char** argv) const {
           it.watch();
         }
       } catch (...) {
-        BOOST_LOG_TRIVIAL(error)
-            << boost::current_exception_diagnostic_information();
+        spdlog::error("{}", boost::current_exception_diagnostic_information());
       }
     });
   }
@@ -105,7 +100,7 @@ int lavender::Application::launch(int argc, char** argv) const {
   for (auto& it : pool) {
     it.join();
   }
-  BOOST_LOG_TRIVIAL(info) << "done.";
+  spdlog::info("done.");
 
   return EXIT_SUCCESS;
 }
