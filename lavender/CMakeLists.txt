@@ -3,7 +3,7 @@ include(FetchContent)
 
 project(
   lavender
-  VERSION 2026.6.25
+  VERSION 2026.8.19
   DESCRIPTION "A logging & SNMP crawler for basil."
   LANGUAGES CXX
 )

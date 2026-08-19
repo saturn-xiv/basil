@@ -12,50 +12,62 @@
 #include <thread>
 
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/program_options.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
+#include <argparse/argparse.hpp>
+
 int lavender::Application::launch(int argc, char** argv) const {
-  std::vector<std::string> folders;
-  std::string config_file;
+  const std::string version =
+      std::format("{}({})", lavender::GIT_VERSION, lavender::BUILD_TIME);
+  argparse::ArgumentParser program(lavender::PROJECT_NAME, version);
+  program.add_description(lavender::PROJECT_DESCRIPTION);
+  program.add_epilog(lavender::PROJECT_HOME);
 
-  boost::program_options::options_description desc("Allowed options");
-  desc.add_options()("help,h", "produce help message")(
-      "version,v", "print version")("debug,d", "run on debug mode")(
-      "config,c",
-      boost::program_options::value<std::string>(&config_file)
-          ->default_value("config.ini"),
-      "load configuration from(default: config.ini)")(
-      "folders,f",
-      boost::program_options::value<std::vector<std::string>>(&folders)
-          ->multitoken()
-          ->composing(),
-      "folders to watching");
+  program.add_argument("-d", "--debug")
+      .help("run on debug mode")
+      .default_value(false)
+      .implicit_value(true);
+  program.add_argument("-c", "--config")
+      .help("load configuration from")
+      .default_value("config.toml")
+      .implicit_value(true);
 
-  boost::program_options::variables_map vm;
-  boost::program_options::store(
-      boost::program_options::parse_command_line(argc, argv, desc), vm);
-  boost::program_options::notify(vm);
+  argparse::ArgumentParser watch_command("watch");
+  watch_command.add_description("watch logging files");
+  watch_command.add_argument("-s", "--stdin")
+      .help("reading from stdin")
+      .default_value(false)
+      .implicit_value(true);
+  watch_command.add_argument("-f", "--folder")
+      .nargs(argparse::nargs_pattern::any)
+      .help("files to watch");
 
-  if (vm.count("help")) {
-    std::cout << desc << std::endl;
-    return EXIT_SUCCESS;
-  }
-  if (vm.count("version")) {
-    std::cout << lavender::VERSION << "-" << lavender::GIT_VERSION << "("
-              << lavender::BUILD_TIME << ")" << std::endl;
-    return EXIT_SUCCESS;
-  }
+  argparse::ArgumentParser snmp_command("snmp");
+  snmp_command.add_description("collect SNMP information");
+  snmp_command.add_argument("-i", "--interval")
+      .default_value(5)
+      .help("seconds")
+      .scan<'i', int>();
+  snmp_command.add_argument("-H", "--host")
+      .nargs(argparse::nargs_pattern::any)
+      .help("snmp hosts to clawer");
 
-  spdlog::set_level(vm.count("debug") ? spdlog::level::debug
-                                      : spdlog::level::info);
+  program.add_subparser(watch_command);
+  program.add_subparser(snmp_command);
+
+  program.parse_args(argc, argv);
+
+  spdlog::set_level(program.get<bool>("debug") ? spdlog::level::debug
+                                               : spdlog::level::info);
   spdlog::debug("runing on debug mode");
 
-  spdlog::debug("load configuration from file {}", config_file);
-
   boost::property_tree::ptree tree;
-  boost::property_tree::ini_parser::read_ini(config_file, tree);
+  {
+    const std::string config_file = program.get<std::string>("config");
+    spdlog::debug("load configuration from file {}", config_file);
+    boost::property_tree::ini_parser::read_ini(config_file, tree);
+  }
   std::string opensearch_url = tree.get<std::string>("opensearch.url");
   std::string opensearch_namespace =
       tree.get<std::string>("opensearch.namespace");
@@ -84,17 +96,21 @@ int lavender::Application::launch(int argc, char** argv) const {
 
   std::vector<std::thread> pool;
 
-  for (const auto& folder : folders) {
-    pool.emplace_back([search, &folder] {
-      try {
-        lavender::logging::filesystem::Watcher it(search, folder);
-        for (;;) {
-          it.watch();
+  if (program.present("--folder")) {
+    const auto folders = program.get<std::vector<std::string>>("--folders");
+    for (const auto& folder : folders) {
+      pool.emplace_back([search, &folder] {
+        try {
+          lavender::logging::filesystem::Watcher it(search, folder);
+          for (;;) {
+            it.watch();
+          }
+        } catch (...) {
+          spdlog::error("{}",
+                        boost::current_exception_diagnostic_information());
         }
-      } catch (...) {
-        spdlog::error("{}", boost::current_exception_diagnostic_information());
-      }
-    });
+      });
+    }
   }
 
   for (auto& it : pool) {

@@ -1,6 +1,6 @@
 [package]
 name = "basil"
-version = "2026.5.31"
+version = "2026.8.19"
 edition = "2024"
 description = "A log aggregation and monitoring solution"
 homepage = "https://github.com/saturn-xiv/basil"
@@ -45,7 +45,7 @@ version = "4"
 features = ["derive"]
 
 [dependencies.jsonwebtoken]
-version = "10"
+version = "11"
 features = ["rust_crypto"]
 
 [dependencies.openssl-sys]
