@@ -1,0 +1,12 @@
+{
+  "dependencies": [
+    "boost-exception",
+    "argparse",
+    "spdlog",
+    "inja",
+    "nlohmann-json",
+    "openssl",
+    { "name": "protobuf", "features": ["libprotoc"] },
+    "grpc"
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "configurePresets": [
+    {
+      "name": "x86_64",
+      "inherits": "vcpkg",
+      "environment": {
+        "VCPKG_ROOT": "${sourceDir}/vcpkg",
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-linux-release",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/../toolchains/clang/x86_64.cmake"
+      }
+    },
+    {
+      "name": "aarch64",
+      "inherits": "vcpkg",
+      "environment": {
+        "VCPKG_ROOT": "${sourceDir}/vcpkg",
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-linux-release",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/../toolchains/clang/aarch64.cmake"
+      }
+    },
+    {
+      "name": "riscv64",
+      "inherits": "vcpkg",
+      "environment": {
+        "VCPKG_ROOT": "${sourceDir}/vcpkg",
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "riscv64-linux-release",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/../toolchains/clang/riscv64.cmake"
+      }
+    }
+  ]
+}

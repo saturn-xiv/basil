@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.github.saturn_xiv.basil.v1";
+option java_outer_classname = "BasilProto";
+option go_package = "./;v2";
+option csharp_namespace = "Palm.Plugins.Basil.Grpc";
+package palm.basil.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+
+service Enforcer {
+  rpc Report(ReportRequest) returns (google.protobuf.Empty) {}
+}
+
+message ReportRequest{
+  message Item{
+    message Error{
+      string reason = 1;
+    }
+    message Snmp{
+      uint32 cpu    = 1;
+      uint32 memory = 2;
+    }
+    oneof by{
+      google.protobuf.Empty postgresql = 1;
+      google.protobuf.Empty mysql      = 2;
+      google.protobuf.Empty rabbitmq   = 3;
+      google.protobuf.Empty http_api   = 4;
+      Snmp                  snmp       = 96;
+      Error                 error      = 97;
+    }
+    google.protobuf.Duration  period     = 98;
+    google.protobuf.Timestamp created_at = 99;
+  }
+  repeated Item items = 1;
+}
