@@ -26,7 +26,7 @@ fi
 
 if [ "$ID" = "ubuntu" ]
 then
-    apt install -y libboost-all-dev libsnmp-dev libcurl4-openssl-dev
+    sudo apt install -y libboost-all-dev libsnmp-dev libcurl4-openssl-dev
 fi
 
 cd $WORK_DIR/
@@ -41,7 +41,8 @@ mkdir -p $TARGET_DIR/$PACKAGE/$(uname -m)/bin
 cp $LAVENDER_BUILD_DIR/lavender $TARGET_DIR/$PACKAGE/$(uname -m)/bin/
 
 cd $WORK_DIR/
-declare -a platforms=("x86_64" "aarch64" "riscv64gc")
+# "riscv64gc"
+declare -a platforms=("x86_64" "aarch64")
 for p in "${platforms[@]}"; do
     cargo build --release --target $p-unknown-linux-gnu
     mkdir -p $TARGET_DIR/$PACKAGE/$p/bin
@@ -57,6 +58,7 @@ fi
 npm run build
 cp -r dist $TARGET_DIR/$PACKAGE/dashboard
 
+cd $WORK_DIR/
 cp -r LICENSE README.md $TARGET_DIR/$PACKAGE/
 
 XZ_OPT=-9 tar -cJf $TARGET_DIR/$PACKAGE.tar.xz --remove-files -C $TARGET_DIR/$PACKAGE .
