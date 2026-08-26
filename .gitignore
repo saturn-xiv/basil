@@ -1,0 +1,6 @@
+/.vscode/
+/tmp/
+/config.toml
+/.stop
+
+/dist/
