@@ -16,7 +16,7 @@ classifiers = [
 license = "MIT"
 license-files = ["LICENSE"]
 
-dependencies = ["flask", "sqlalchemy", "pika", "opensearch-py"]
+dependencies = ["flask", "sqlalchemy", "pika", "opensearch-py", "pynacl"]
 
 [project.urls]
 Homepage = "https://github.com/saturn-xiv/basil"

@@ -42,3 +42,23 @@ def launch_http_server(config, port, workers):
     signal.signal(signal.SIGINT, handle_shutdown)
 
     logger.info('exited')
+
+
+def launch_worker(config):
+    pass
+
+
+def create_user(config, id, name, password):
+    pass
+
+
+def set_user_password(config, id, password):
+    pass
+
+
+def disable_user(config, id):
+    pass
+
+
+def enable_user(config, id):
+    pass
