@@ -7,6 +7,7 @@
     $ cd $HOME/workspace/basil/
     $ python3 -m venv tmp/python3
     $ source $PWD/tmp/python3/bin/activate
+    > pip install --upgrade autopep8
 
     # Building
     > python -m pip install --upgrade build

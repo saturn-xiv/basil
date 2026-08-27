@@ -16,7 +16,8 @@ def main():
                         action='store_true', help='run on debug mode')
     subparsers = parser.add_subparsers(dest="Sub-Commands", required=True)
 
-    server_parser = subparsers.add_parser("server", help="start a HTTP server with email/job worker")
+    server_parser = subparsers.add_parser(
+        "server", help="start a HTTP server with email/job worker")
     server_parser.add_argument('-p', '--port', type=int, default=8080)
     server_parser.set_defaults(func=_handle_server)
 
