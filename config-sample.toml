@@ -1,0 +1,12 @@
+# openssl rand -base64 128
+cookie-key = ""
+
+# smtp.exmail.qq.com:465 smtp.qq.com:587 smtp.gmail.com:587
+[smtp]
+host = ""
+port = 587
+password = ""
+
+[smtp.from]
+name = ""
+email = ""
