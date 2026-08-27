@@ -1,0 +1,16 @@
+[Unit]
+Description=A log aggregation and monitoring solution.
+Documentation=https://github.com/saturn-xiv/dasil
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+ExecStart=source /opt/python3/bin/active && dasil -c config.toml server -p 8001
+WorkingDirectory=/var/lib/dasil
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

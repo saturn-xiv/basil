@@ -3,17 +3,20 @@ import argparse
 import tomllib
 import signal
 import sys
-
+from logging.handlers import RotatingFileHandler
 
 logger = logging.getLogger(__name__)
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="A log aggregation and monitoring solution.")
-    parser.add_argument('-c', '--config', default='config.toml')
+    parser = argparse.ArgumentParser(description="A log aggregation and monitoring solution.",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        '-c', '--config', default='config.toml', help='configuration file')
     parser.add_argument('-d', '--debug',
                         action='store_true', help='run on debug mode')
+    parser.add_argument('-v', '--verbose',
+                        action='version', version='2026.8.26')
     subparsers = parser.add_subparsers(dest="Sub-Commands", required=True)
 
     server_parser = subparsers.add_parser(
@@ -48,20 +51,16 @@ def main():
     disable_user_parser.add_argument("-I", "--id", required=True)
     disable_user_parser.set_defaults(func=_handle_disable_user)
 
-    # http_parser.add_argument('-p', '--port', type=int, default=8080)
-    # http_parser.add_argument("target", help="Target node")
-    # http_parser.set_defaults(func=_launch_http_server)
-    # parser.add_argument('-c', '--config', default='config.toml')
-    # parser.add_argument('-p', '--port', type=int, default=8080)
-    # parser.add_argument('-w', '--worker', action='store_true',
-    #                     help='start a job worker')
-    # parser.add_argument('-d', '--debug',
-    #                     action='store_true', help='run on debug mode')
-    # parser.add_argument('-v', '--verbose',
-    #                     action='version', version='2026.8.26')
     args = parser.parse_args()
     logging.basicConfig(
         format='%(asctime)s %(levelname).1s %(message)s', level=logging.DEBUG if args.debug else logging.INFO)
+
+    handler = RotatingFileHandler(
+        "tmp/log", maxBytes=100 * 1024 * 1024, backupCount=10)
+    formatter = logging.Formatter("%(asctime)s %(levelname).1s %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
     logger.debug("running on debug mode")
     logger.debug("load configuration from %s", args.config)
     args.func(args)
